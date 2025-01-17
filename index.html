@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UX Team Pseudolocalization Text Length Visualizer</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .card {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .card-header {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        .card-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        .card-content {
+            padding: 20px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+            position: relative;
+        }
+        .input-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .input-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .dropdown-arrow {
+            font-size: 0.8rem;
+            transition: transform 0.2s;
+        }
+        .dropdown-arrow.open {
+            transform: rotate(180deg);
+        }
+        .language-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: none;
+            z-index: 1000;
+        }
+        .language-dropdown.open {
+            display: block;
+        }
+        .dropdown-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .dropdown-item:hover {
+            background: #f3f4f6;
+        }
+        .input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+        .input:focus {
+            outline: none;
+            border-color: #f97316;
+            box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2);
+        }
+        /* ... Diğer stiller aynı kalacak ... */
+        .language-item {
+            padding: 12px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            user-select: text;
+        }
+        .language-item:hover {
+            border-color: #3b82f6;
+        }
+        .language-item.dragging {
+            opacity: 0.5;
+            background: #f3f4f6;
+            position: relative;
+        }
+        .language-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .language-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.875rem;
+            color: #666;
+        }
+        .language-stats {
+            display: flex;
+            gap: 16px;
+        }
+        .factor {
+            font-size: 0.75rem;
+            color: #666;
+        }
+        .length {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #000;
+        }
+        .length.max-length {
+            color: #ef4444;
+        }
+        .pseudo-text {
+            margin-top: 8px;
+            font-family: monospace;
+            font-size: 1rem;
+            user-select: text;
+            cursor: text;
+        }
+        .grip {
+            color: #999;
+            cursor: move;
+            padding: 4px;
+            margin: -4px;
+            user-select: none;
+        }
+        .drag-handle-area {
+            cursor: move;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px;
+            margin: -4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="card-header">
+            <h1 class="card-title">UX Team Pseudolocalization Text Length Visualizer</h1>
+        </div>
+        <div class="card-content">
+            <div class="input-group">
+                <div class="input-header">
+                    <label class="input-label" id="baseLanguageLabel">
+                        Base Text (Turkish)
+                        <span class="dropdown-arrow">▼</span>
+                    </label>
+                    <div class="language-dropdown">
+                        <div class="dropdown-item" data-lang="tr">Turkish</div>
+                        <div class="dropdown-item" data-lang="en">English</div>
+                    </div>
+                </div>
+                <input type="text" class="input" placeholder="Enter text..." id="textInput">
+            </div>
+            <div id="languagesList"></div>
+        </div>
+    </div>
+
+    <script>
+        const languageFactors = {
+            'Türkçe': 1,
+            'English': 1,
+            'Български - Bulgarian': 1.6,
+            'Czech - Čeština': 1.2,
+            'German - Deutsch': 1.6,
+            'Greece - Greek': 1.8,
+            'Hungary - Hungarian': 1.6,
+            'Poland - Polski': 1.6,
+            'Romania - Română': 1.4,
+            'Slovak - Slovenčina': 1.2,
+            'العربية - Saudi': 1.8,
+            'Azerbaycan - Azeri': 1.4
+        };
+
+        const pseudoChars = {
+            'a': 'āăąàáâãäåāăąǻ',
+            'e': 'èéêëēĕėęě',
+            'i': 'ìíîïìíîïǐǧ',
+            'o': 'òóôõöōŏőơǒǫǭǿ',
+            'u': 'ùúûüũūŭůűų',
+            'n': 'ñńņňṅṇṉṋṅ',
+            's': 'śŝşšș',
+            'l': 'ĺļľŀł',
+            'z': 'źżžƶ',
+            'c': 'çćĉċč',
+            'r': 'ŕŗř',
+            'y': 'ýÿŷ'
+        };
+
+        let languages = Object.keys(languageFactors);
+        let draggedItem = null;
+        let currentBaseLanguage = 'tr';
+
+        const textInput = document.getElementById('textInput');
+        const languagesList = document.getElementById('languagesList');
+        const baseLanguageLabel = document.getElementById('baseLanguageLabel');
+        const dropdownArrow = document.querySelector('.dropdown-arrow');
+        const languageDropdown = document.querySelector('.language-dropdown');
+
+        // Dil seçici için event listener'lar
+        baseLanguageLabel.addEventListener('click', (e) => {
+            languageDropdown.classList.toggle('open');
+            dropdownArrow.classList.toggle('open');
+        });
+
+        // Dropdown dışına tıklandığında kapanması
+        document.addEventListener('click', (e) => {
+            if (!baseLanguageLabel.contains(e.target)) {
+                languageDropdown.classList.remove('open');
+                dropdownArrow.classList.remove('open');
+            }
+        });
+
+        // Dil seçimi
+        document.querySelectorAll('.dropdown-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                const lang = e.target.dataset.lang;
+                currentBaseLanguage = lang;
+                const labelText = lang === 'tr' ? 'Turkish' : 'English';
+                baseLanguageLabel.firstChild.textContent = `Base Text (${labelText}) `;
+                languageDropdown.classList.remove('open');
+                dropdownArrow.classList.remove('open');
+                textInput.placeholder = `Enter ${labelText} text...`;
+            });
+        });
+
+        function pseudolocalize(text, factor) {
+            if (!text) return '';
+            
+            let result = text.toLowerCase().split('').map(char => {
+                if (pseudoChars[char]) {
+                    const possibleChars = pseudoChars[char];
+                    return possibleChars[Math.floor(Math.random() * possibleChars.length)];
+                }
+                return char;
+            }).join('');
+
+            if (factor > 1) {
+                const extraChars = Math.floor(text.length * (factor - 1));
+                const lastChar = result[result.length - 1];
+                result = result + lastChar.repeat(extraChars);
+            }
+
+            return result;
+        }
+
+        function renderLanguages() {
+            const lengths = languages.map(lang => 
+                Math.ceil(textInput.value.length * languageFactors[lang])
+            );
+            const maxLength = Math.max(...lengths);
+            const hasText = textInput.value.length > 0;
+
+            languagesList.innerHTML = languages.map((lang, index) => {
+                const currentLength = Math.ceil(textInput.value.length * languageFactors[lang]);
+                const isMaxLength = hasText && currentLength === maxLength;
+                return `
+                    <div class="language-item" data-index="${index}">
+                        <div class="language-header">
+                            <div class="language-title">
+                                <div class="drag-handle-area" draggable="true">
+                                    <span class="grip">⋮⋮</span>
+                                    <span>${lang}</span>
+                                </div>
+                            </div>
+                            <div class="language-stats">
+                                <span class="factor">${languageFactors[lang]}x</span>
+                                <span class="length ${isMaxLength ? 'max-length' : ''}">${currentLength} chars</span>
+                            </div>
+                        </div>
+                        <div class="pseudo-text">${pseudolocalize(textInput.value, languageFactors[lang])}</div>
+                    </div>
+                `;
+            }).join('');
+
+            attachDragListeners();
+        }
+
+        function attachDragListeners() {
+            const handles = document.querySelectorAll('.drag-handle-area');
+            handles.forEach(handle => {
+                handle.addEventListener('dragstart', handleDragStart);
+                handle.addEventListener('dragend', handleDragEnd);
+            });
+
+            const items = document.querySelectorAll('.language-item');
+            items.forEach(item => {
+                item.addEventListener('dragover', handleDragOver);
+                item.addEventListener('drop', handleDrop);
+            });
+        }
+
+        function handleDragStart(e) {
+            draggedItem = this.closest('.language-item');
+            draggedItem.classList.add('dragging');
+            
+            const rect = draggedItem.getBoundingClientRect();
+            const ghostImage = draggedItem.cloneNode(true);
+            ghostImage.style.width = rect.width + 'px';
+            ghostImage.style.height = rect.height + 'px';
+            ghostImage.style.position = 'fixed';
+            ghostImage.style.top = '-1000px';
+            ghostImage.style.opacity = '0.8';
+            document.body.appendChild(ghostImage);
+            
+            e.dataTransfer.setDragImage(ghostImage, 10, 10);
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', '');
+            
+            setTimeout(() => {
+                document.body.removeChild(ghostImage);
+            }, 0);
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const droppedItem = this;
+            
+            if (draggedItem === droppedItem) return;
+
+            const allItems = [...document.querySelectorAll('.language-item')];
+            const draggedIdx = Number(draggedItem.dataset.index);
+            const droppedIdx = Number(droppedItem.dataset.index);
+
+            const newLanguages = [...languages];
+            const [removed] = newLanguages.splice(draggedIdx, 1);
+            newLanguages.splice(droppedIdx, 0, removed);
+            
+            languages = newLanguages;
+            renderLanguages();
+        }
+
+        function handleDragEnd(e) {
+            if (draggedItem) {
+                draggedItem.classList.remove('dragging');
+                draggedItem = null;
+            }
+        }
+
+        textInput.addEventListener('input', renderLanguages);
+        renderLanguages();
+    </script>
+</body>
+</html>
